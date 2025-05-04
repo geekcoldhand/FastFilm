@@ -1,7 +1,8 @@
 import React, { use, useRef, useState } from "react";
-import { RefreshCw, Upload } from "lucide-react";
+import { Upload, RefreshCw, Palette, Layers, Lightbulb } from "lucide-react";
 import { useControls } from "./hooks/create-controls-context";
 import useActiveTab from "./hooks/use-active-tab";
+import TabControlPanel from "./components/TabControlPanel";
 
 function Main() {
 	const [image, setImage] = useState<string | null>(null);
@@ -14,7 +15,10 @@ function Main() {
 
 	const { activeTabControl, openTab } = useActiveTab();
 	const { controls, setControl } = useControls();
-	const prevControlsRef = useRef(controls);
+  const prevControlsRef = useRef(controls);
+  
+  type Tab = "color" | "texture" | "lighting";
+
 
 	const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -40,7 +44,8 @@ function Main() {
 	const applyFilter = () => {
 		// TODO
 	};
-	return (
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
 		<div>
 			<div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"}}>
 				<h1>Fast Film Filter</h1>
@@ -82,7 +87,29 @@ function Main() {
 				</div>
 			</div>
 			<canvas></canvas>
-		</div>
+    </div>
+    
+    <TabControlPanel open={activeTabControl as Tab } />
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 flex justify-around items-center z-40">
+      <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center p-2">
+        <Upload className="h-5 w-5 mb-1" />
+        <span className="text-xs">Upload</span>
+      </button>
+      {["color", "texture", "lighting"].map((tab) => (
+        <button
+          key={tab}
+          className="flex flex-col items-center justify-center p-2"
+          onClick={() => openTab(tab === activeTabControl ? "color" : tab)}
+        >
+          {tab === "color" && <Palette className="h-5 w-5 mb-1" />}
+          {tab === "texture" && <Layers className="h-5 w-5 mb-1" />}
+          {tab === "lighting" && <Lightbulb className="h-5 w-5 mb-1" />}
+          <span className="text-xs capitalize">{tab}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+    
 	);
 }
 
