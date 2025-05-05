@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/FastFilm/static/css/main.e6c13ad2.css",
+    "main.js": "/FastFilm/static/js/main.92e1ec89.js",
+    "index.html": "/FastFilm/index.html",
+    "main.e6c13ad2.css.map": "/FastFilm/static/css/main.e6c13ad2.css.map",
+    "main.92e1ec89.js.map": "/FastFilm/static/js/main.92e1ec89.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.92e1ec89.js"
+  ]
+}
