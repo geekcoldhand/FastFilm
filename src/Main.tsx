@@ -98,7 +98,7 @@ function Main() {
       ctx.putImageData(imageData, 0, 0);
 
       if (controls.grain > 0) {
-        const grainAmount = controls.grain / 80;
+        const grainAmount = controls.grain / 100;
         for (let i = 0; i < (width * height) / 20; i++) {
           const x = Math.random() * width;
           const y = Math.random() * height;
@@ -166,6 +166,23 @@ function Main() {
       }
 
       setIsProcessing(false);
+    };
+  
+    const downloadCanvas = () => {
+      const canvas = canvasRef.current as HTMLCanvasElement;
+      const dataURL = canvas.toDataURL("image/png");
+    
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+      if (isSafari) {
+        window.open(dataURL, "_blank");
+      } else {
+        // Trigger download
+        const link = document.createElement("a");
+        link.href = dataURL;
+        link.download = "my-image.png";
+        link.click();
+      }
     };
 
     useEffect(() => {
@@ -247,9 +264,9 @@ function Main() {
               />
               <button
                 style={{ marginTop: "1rem" }}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => downloadCanvas()}
               >
-                Change Image
+                Download Image
               </button>
             </div>
           )}
