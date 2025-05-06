@@ -1,12 +1,13 @@
-import React, { use, useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Upload, RefreshCw, Palette, Layers, Lightbulb } from "lucide-react";
 import { useControls } from "./hooks/create-controls-context";
 import useActiveTab from "./hooks/use-active-tab";
 import TabControlPanel from "./components/TabControlPanel";
 
+type Tab = "color" | "texture" | "lighting";
+
 function Main() {
 	const [image, setImage] = useState<string | null>(null);
-	const [filteredImage, setFilteredImage] = useState<string | null>(null);
 	const [isProcessing, setIsProcessing] = useState(false);
 
 	const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -14,11 +15,8 @@ function Main() {
 	const imgRef = useRef<HTMLImageElement | null>(null);
 
 	const { activeTabControl, openTab } = useActiveTab();
-	const { controls, setControl } = useControls();
-  const prevControlsRef = useRef(controls);
-  
-  type Tab = "color" | "texture" | "lighting";
-
+	const { controls } = useControls();
+	const prevControlsRef = useRef(controls);
 
 	const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -26,90 +24,301 @@ function Main() {
 
 		const reader = new FileReader();
 		reader.onload = () => {
-			if (reader.result) {
-				setImage(reader.result as string);
+			const result = reader.result as string;
+			setImage(result);
 
-				const img = new Image();
-				img.crossOrigin = "anonymous";
-				img.src = reader.result as string;
-				img.onload = () => {
-					imgRef.current = img;
-					applyFilter();
-				};
-			}
+			const img = new Image();
+			img.crossOrigin = "anonymous";
+			img.src = result;
+			img.onload = () => {
+				const canvas = canvasRef.current;
+				if (!canvas) return;
+
+				const ctx = canvas.getContext("2d");
+				if (!ctx) return;
+
+				canvas.width = img.width;
+				canvas.height = img.height;
+
+				imgRef.current = img;
+				ctx.drawImage(img, 0, 0);
+				applyFilter(ctx);
+			};
 		};
 		reader.readAsDataURL(file);
 	};
 
-	const applyFilter = () => {
-		// TODO
-	};
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-		<div>
-			<div style={{display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center"}}>
-				<h1>Fast Film Filter</h1>
+	const applyFilter = (ctx: CanvasRenderingContext2D) => {
+		if (!canvasRef.current || !imgRef.current) return;
 
-				<div>
-					{!image ? (
-						<div style={{ textAlign: "center" , display: "flex", flexDirection: "column", alignItems: "center"}}>
-							<Upload />
-							<h3>Upload a photo</h3>
-							<p>PNG, JPG, WEBP up to 10MB</p>
-							<div style={{ display: "flex", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
-								<button onClick={() => fileInputRef.current?.click()}>
-									Select Image
-								</button>
-								<input
-									ref={fileInputRef}
-									type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-									onChange={handleImageUpload}
-								/>
-							</div>
-						</div>
-					) : (
-						<div style={{ display: "flex", flexDirection: "column" , alignItems: "center", justifyContent: "space-around"}}>
-							{isProcessing && (
-								<div>
-									<RefreshCw />
-								</div>
-							)}
-							<img src={filteredImage || image} alt="Filtered" style={{ maxWidth: "22rem" }}/>
-							<div>
-								<button onClick={() => fileInputRef.current?.click()}>
-									Change Image
-								</button>
-							</div>
-						</div>
-					)}
-				</div>
+    const { width, height } = canvasRef.current;
+    ctx.clearRect(0, 0, width, height);
+		ctx.drawImage(imgRef.current, 0, 0, width, height);
+
+		const imageData = ctx.getImageData(0, 0, width, height);
+		const data = imageData.data;
+
+		const tempFactor = controls.temperature / 100;
+		const satFactor = 1 - controls.saturation / 100;
+		const contrastFactor = 1 - controls.contrast / 200;
+		const dimFactor = 1 - controls.dimming / 200;
+
+		for (let i = 0; i < data.length; i += 4) {
+			let r = data[i];
+			let g = data[i + 1];
+			let b = data[i + 2];
+
+			r = Math.max(0, r - tempFactor * 30);
+			b = Math.min(255, b + tempFactor * 15);
+
+			if (r + g + b < 380) {
+				b = Math.min(255, b + controls.shadowBlue / 20);
+				g = Math.min(255, g + controls.shadowBlue / 40);
+			}
+
+			const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+			r = r + satFactor * (luminance - r);
+			g = g + satFactor * (luminance - g);
+			b = b + satFactor * (luminance - b);
+
+			r = 128 + (r - 128) * contrastFactor;
+			g = 128 + (g - 128) * contrastFactor;
+			b = 128 + (b - 128) * contrastFactor;
+
+			r *= dimFactor;
+			g *= dimFactor;
+			b *= dimFactor;
+
+			data[i] = r;
+			data[i + 1] = g;
+			data[i + 2] = b;
+		}
+
+		ctx.putImageData(imageData, 0, 0);
+
+		if (controls.grain > 0) {
+			const grainAmount = controls.grain / 1040;
+			for (let i = 0; i < (width * height) / 20; i++) {
+				const x = Math.random() * width;
+				const y = Math.random() * height;
+				const radius = Math.random() * 2 * grainAmount;
+				const opacity = 0.1 + Math.random() * 0.2;
+				ctx.fillStyle = `rgba(200, 200, 200, ${opacity})`;
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, Math.PI * 2);
+				ctx.fill();
+			}
+		}
+
+		if (controls.dust > 0) {
+			const dustAmount = controls.dust / 100;
+			for (let i = 0; i < 20 * (dustAmount / 100); i++) {
+				const x = Math.random() * width;
+				const y = Math.random() * height;
+				const length = 30 + Math.random() * 50;
+				const angle = Math.random() * Math.PI * 2;
+				const opacity = 0.05 + Math.random() * 0.1;
+				ctx.beginPath();
+				ctx.moveTo(x, y);
+				ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+				ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
+				ctx.lineWidth = 0.5;
+				ctx.stroke();
+			}
+		}
+
+		if (controls.blur > 0) {
+			const blurAmount = controls.blur / 100;
+			ctx.filter = `blur(${blurAmount * 3}px)`;
+			ctx.drawImage(canvasRef.current, 0, 0);
+			ctx.filter = "none";
+		}
+
+		if (controls.leakIntensity > 0) {
+			ctx.globalCompositeOperation = "screen";
+			const leakAmount = controls.leakIntensity / 100;
+
+			const leakColors = [
+				{ color: `rgba(255, 80, 80, ${0.15 * leakAmount})`, x: 0, y: 0 },
+				{
+					color: `rgba(255, 200, 100, ${0.1 * leakAmount})`,
+					x: width * 0.3,
+					y: height * 0.2,
+				},
+				{
+					color: `rgba(255, 100, 200, ${0.1 * leakAmount})`,
+					x: width * 0.7,
+					y: height * 0.4,
+				},
+			];
+
+			leakColors.forEach(({ color, x, y }) => {
+				const grad = ctx.createRadialGradient(x, y, 0, x, y, width / 2);
+				grad.addColorStop(0, color);
+				grad.addColorStop(1, "transparent");
+				ctx.fillStyle = grad;
+				ctx.fillRect(0, 0, width, height);
+			});
+
+			ctx.globalCompositeOperation = "source-over";
+		}
+
+		setIsProcessing(false);
+	};
+
+	useEffect(() => {
+		if (!canvasRef.current || !imgRef.current) return;
+		const changed =
+			JSON.stringify(controls) !== JSON.stringify(prevControlsRef.current);
+		if (changed) {
+			const ctx = canvasRef.current.getContext("2d");
+			if (!ctx) return;
+			prevControlsRef.current = controls;
+			setIsProcessing(true);
+			applyFilter(ctx);
+		}
+	}, [controls]);
+
+	return (
+		<div
+			className="flex flex-col items-center w-full"
+			style={{
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				width: "100%",
+			}}
+		>
+			<div
+				className="shadow-lg border p-4 mb-10"
+				style={{
+					textAlign: "center",
+					marginTop: "1rem",
+					maxWidth: "24rem",
+					width: "90%",
+				}}
+			>
+				<h1
+					style={{
+						fontWeight: "bold",
+						fontSize: "1.25rem",
+						marginBottom: "0.5rem",
+					}}
+				>
+					Fast Film Filter
+				</h1>
+
+				{!image ? (
+					<div style={{ margin: "1rem 0" }}>
+						<Upload
+							style={{
+								width: "1.25rem",
+								height: "1.25rem",
+								margin: "0 auto 0.5rem",
+							}}
+						/>
+						<h3>Upload a photo</h3>
+						<p>PNG, JPG, WEBP up to 10MB</p>
+						<button
+							style={{ marginTop: "0.5rem" }}
+							onClick={() => fileInputRef.current?.click()}
+						>
+							Select Image
+						</button>
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept="image/*"
+							style={{ display: "none" }}
+							onChange={handleImageUpload}
+						/>
+					</div>
+				) : (
+					<div
+						className="flex flex-col items-center"
+						style={{ width: "21rem", margin: "0 auto" }}
+					>
+						{isProcessing && <RefreshCw className="animate-spin mb-2" />}
+						<canvas
+							ref={canvasRef}
+							style={{ width: "100%", display: "block" }}
+						/>
+						<button
+							style={{ marginTop: "1rem" }}
+							onClick={() => fileInputRef.current?.click()}
+						>
+							Change Image
+						</button>
+					</div>
+				)}
 			</div>
-			<canvas></canvas>
-    </div>
-    
-    <TabControlPanel open={activeTabControl as Tab } />
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 flex justify-around items-center z-40">
-      <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center p-2">
-        <Upload className="h-5 w-5 mb-1" />
-        <span className="text-xs">Upload</span>
-      </button>
-      {["color", "texture", "lighting"].map((tab) => (
-        <button
-          key={tab}
-          className="flex flex-col items-center justify-center p-2"
-          onClick={() => openTab(tab === activeTabControl ? "color" : tab)}
-        >
-          {tab === "color" && <Palette className="h-5 w-5 mb-1" />}
-          {tab === "texture" && <Layers className="h-5 w-5 mb-1" />}
-          {tab === "lighting" && <Lightbulb className="h-5 w-5 mb-1" />}
-          <span className="text-xs capitalize">{tab}</span>
-        </button>
-      ))}
-    </div>
-  </div>
-    
+
+			<TabControlPanel open={activeTabControl as Tab} />
+
+			<div
+				className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center z-40"
+				style={{
+					padding: "1rem 1rem 1.25rem",
+					width: "100%",
+					display: "flex",
+					justifyContent: "center",
+				}}
+			>
+				<button
+					onClick={() => fileInputRef.current?.click()}
+					className="flex flex-col items-center"
+					style={{ padding: "0.25rem" }}
+				>
+					<Upload
+						style={{
+							width: "1.25rem",
+							height: "1.25rem",
+							marginBottom: "0.25rem",
+						}}
+					/>
+					<span style={{ fontSize: "0.75rem" }}>Upload</span>
+				</button>
+				{["color", "texture", "lighting"].map((tab) => (
+					<button
+						key={tab}
+						className="flex flex-col items-center"
+						style={{ padding: "0.25rem" }}
+						onClick={() => openTab(tab === activeTabControl ? "color" : tab)}
+					>
+						{tab === "color" && (
+							<Palette
+								style={{
+									width: "1.25rem",
+									height: "1.25rem",
+									marginBottom: "0.25rem",
+								}}
+							/>
+						)}
+						{tab === "texture" && (
+							<Layers
+								style={{
+									width: "1.25rem",
+									height: "1.25rem",
+									marginBottom: "0.25rem",
+								}}
+							/>
+						)}
+						{tab === "lighting" && (
+							<Lightbulb
+								style={{
+									width: "1.25rem",
+									height: "1.25rem",
+									marginBottom: "0.25rem",
+								}}
+							/>
+						)}
+						<span style={{ fontSize: "0.75rem", textTransform: "capitalize" }}>
+							{tab}
+						</span>
+					</button>
+				))}
+			</div>
+		</div>
 	);
 }
 
