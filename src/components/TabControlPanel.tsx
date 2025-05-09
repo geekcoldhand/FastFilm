@@ -36,12 +36,13 @@ export default function TabControlPanel({ open }: { open: Tab }) {
 	};
 
 	return (
-		<div className="fixed bottom-[79px] left-0 right-0 z-30 bg-white border-t border-b border-gray-200 p-4">
+		<div className="" style={{width: "70%",  }}>
 			{open === "color" && (
-				<div className="space-y-6">
+				<div className="space-y-6"
+				style={{borderTop: "1px solid #e5e7eb", borderBottom: "1px solid #e5e7eb",}}>
 					<div>
 						<div className="flex justify-between mb-2">
-							<Label htmlFor="temperature">Cool Temperature</Label>
+							<Label htmlFor="temperature">Cool Temperature </Label>
 							<span className="text-sm text-gray-500">
 								{controls.temperature}%
 							</span>
@@ -61,7 +62,7 @@ export default function TabControlPanel({ open }: { open: Tab }) {
 
 					<div>
 						<div className="flex justify-between mb-2">
-							<Label htmlFor="shadowBlue">Blue Shadows</Label>
+							<Label htmlFor="shadowBlue">Blue Shadows </Label>
 							<span className="text-sm text-gray-500">
 								{controls.shadowBlue}%
 							</span>
@@ -81,7 +82,7 @@ export default function TabControlPanel({ open }: { open: Tab }) {
 
 					<div>
 						<div className="flex justify-between mb-2">
-							<Label htmlFor="saturation">Desaturation</Label>
+							<Label htmlFor="saturation">Saturation </Label>
 							<span className="text-sm text-gray-500">
 								{controls.saturation}%
 							</span>
@@ -89,7 +90,7 @@ export default function TabControlPanel({ open }: { open: Tab }) {
 						<Slider
 							id="saturation"
 							min={0}
-							max={100}
+							max={120}
 							step={1}
 							value={[controls.saturation]}
 							onValueChange={(value) =>
@@ -101,7 +102,7 @@ export default function TabControlPanel({ open }: { open: Tab }) {
 
 					<div>
 						<div className="flex justify-between mb-2">
-							<Label htmlFor="contrast">Reduced Contrast</Label>
+							<Label htmlFor="contrast">Reduced Contrast </Label>
 							<span className="text-sm text-gray-500">
 								{controls.contrast}%
 							</span>

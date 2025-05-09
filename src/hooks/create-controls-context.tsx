@@ -14,12 +14,12 @@ type Controls = {
 };
 
 const defaultControls: Controls = {
-  temperature: 30,
-  shadowBlue: 20,
-  saturation: 70,
-  contrast: 40,
+  temperature: 40,
+  shadowBlue: 60,
+  saturation: 90,
+  contrast: 60,
   grain: 60,
-  dust: 40,
+  dust: 4,
   blur: 20,
   dimming: 25,
   leakIntensity: 35,

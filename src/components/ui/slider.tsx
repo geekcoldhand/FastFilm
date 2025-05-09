@@ -35,7 +35,7 @@ const Slider = React.forwardRef<
 				style={{
 					position: "absolute",
 					height: "100%",
-					backgroundColor: "#3b82f6", // Tailwind `bg-primary`
+					backgroundColor: "#78a5ba", // Tailwind `bg-primary`
 				}}
 			/>
 		</SliderPrimitive.Track>
