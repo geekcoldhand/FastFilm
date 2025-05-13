@@ -45,6 +45,14 @@ function Main() {
 		tempCanvasRef.current.height = height;
 		return tempCanvasRef.current;
 	};
+	const debounce = (func: Function, delay: number) => {
+		let timeoutId: NodeJS.Timeout;
+		return (...args: any[]) => {
+		  clearTimeout(timeoutId);
+		  timeoutId = setTimeout(() => func(...args), delay);
+		};
+	  };
+
 	const shouldReprocessBase = (oldControls: typeof controls | null, newControls: typeof controls): boolean => {
 		if (!oldControls) return true;
 		
@@ -93,59 +101,94 @@ function Main() {
 	};
 
 	const applyFilter = (ctx: CanvasRenderingContext2D) => {
-		if (!canvasRef.current || !imgRef.current) return;
-
-		const { width, height } = canvasRef.current;
-	
-
-		ctx.clearRect(0, 0, width, height);
-		ctx.drawImage(imgRef.current, 0, 0, width, height);
-
-		const imageData = ctx.getImageData(0, 0, width, height);
-		const data = imageData.data;
-
-		const tempFactor = controls.temperature / 100;
-		const satFactor = 1 - controls.saturation / 100;
-		const contrastFactor = 1 - controls.contrast / 200;
-		const dimFactor = 1 - controls.dimming / 200;
-
-		for (let i = 0; i < data.length; i += 4) {
-			let r = data[i];
-			let g = data[i + 1];
-			let b = data[i + 2];
-
-			r = Math.max(0, r - tempFactor * 30);
-			b = Math.min(255, b + tempFactor * 15);
-
-			if (r + g + b < 380) {
-				b = Math.min(255, b + controls.shadowBlue / 20);
-				g = Math.min(255, g + controls.shadowBlue / 40);
+			if (!canvasRef.current || !imgRef.current) return;
+		  
+			const { width, height } = canvasRef.current;
+			const cache = cacheRef.current;
+			
+			// Only reprocess pixel data if necessary controls have changed
+			if (shouldReprocessBase(cache.controlsSnapshot, controls)) {
+			  // Clear and draw the original image
+			  ctx.clearRect(0, 0, width, height);
+			  ctx.drawImage(imgRef.current, 0, 0, width, height);
+			  
+			  // Get image data for processing
+			  let imageData = ctx.getImageData(0, 0, width, height);
+			  
+			  // Store original image data in cache if not already there
+			  if (!cache.baseImageData) {
+				cache.baseImageData = new ImageData(
+				  new Uint8ClampedArray(imageData.data), 
+				  imageData.width, 
+				  imageData.height
+				);
+			  } else {
+				// Reset to original image data to avoid compounding effects
+				imageData = new ImageData(
+				  new Uint8ClampedArray(cache.baseImageData.data),
+				  cache.baseImageData.width,
+				  cache.baseImageData.height
+				);
+			  }
+			  
+			  const data = imageData.data;
+			  const tempFactor = controls.temperature / 100;
+			  const satFactor = 1 - controls.saturation / 100;
+			  const contrastFactor = 1 - controls.contrast / 200;
+			  const dimFactor = 1 - controls.dimming / 200;
+		  
+			  // Your existing pixel processing loop
+			  for (let i = 0; i < data.length; i += 4) {
+				let r = data[i];
+				let g = data[i + 1];
+				let b = data[i + 2];
+		  
+				r = Math.max(0, r - tempFactor * 30);
+				b = Math.min(255, b + tempFactor * 15);
+		  
+				if (r + g + b < 380) {
+				  b = Math.min(255, b + controls.shadowBlue / 20);
+				  g = Math.min(255, g + controls.shadowBlue / 40);
+				}
+		  
+				const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+				r = r + satFactor * (luminance - r);
+				g = g + satFactor * (luminance - g);
+				b = b + satFactor * (luminance - b);
+		  
+				r = 128 + (r - 128) * contrastFactor;
+				g = 128 + (g - 128) * contrastFactor;
+				b = 128 + (b - 128) * contrastFactor;
+		  
+				r *= dimFactor;
+				g *= dimFactor;
+				b *= dimFactor;
+		  
+				data[i] = r;
+				data[i + 1] = g;
+				data[i + 2] = b;
+			  }
+			  
+			  // Store processed base image in cache
+			  cache.processedBaseImage = new ImageData(
+				new Uint8ClampedArray(imageData.data),
+				imageData.width,
+				imageData.height
+			  );
+			  
+			  // Update canvas with processed image
+			  ctx.putImageData(imageData, 0, 0);
+			} else if (cache.processedBaseImage) {
+			  // Use cached base processed image
+			  ctx.clearRect(0, 0, width, height);
+			  ctx.putImageData(cache.processedBaseImage, 0, 0);
 			}
-
-			const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-			r = r + satFactor * (luminance - r);
-			g = g + satFactor * (luminance - g);
-			b = b + satFactor * (luminance - b);
-
-			r = 128 + (r - 128) * contrastFactor;
-			g = 128 + (g - 128) * contrastFactor;
-			b = 128 + (b - 128) * contrastFactor;
-
-			r *= dimFactor;
-			g *= dimFactor;
-			b *= dimFactor;
-
-			data[i] = r;
-			data[i + 1] = g;
-			data[i + 2] = b;
-		}
-
-		ctx.putImageData(imageData, 0, 0);
-
-		if (controls.grain > 0) {
-			const grainAmount = controls.grain / 100;
-			const density = (width * height) / 5; // Increase number of particles
-			for (let i = 0; i < density * grainAmount; i++) {
+		  
+			// Keep the rest of your effects code unchanged for now
+			if (controls.grain > 0) {
+			  const grainAmount = controls.grain / 100;
+			  const density = (width * height) / 5; // Increase number of particles
+			  for (let i = 0; i < density * grainAmount; i++) {
 				const x = Math.random() * width;
 				const y = Math.random() * height;
 				const radius = Math.random() * 0.5 + 0.3;
@@ -154,12 +197,12 @@ function Main() {
 				ctx.beginPath();
 				ctx.arc(x, y, radius, 0, Math.PI * 2);
 				ctx.fill();
+			  }
 			}
-		}
-
-		if (controls.dust > 0) {
-			const dustAmount = controls.dust;
-			for (let i = 0; i < dustAmount * 8; i++) {
+		  
+			if (controls.dust > 0) {
+			  const dustAmount = controls.dust;
+			  for (let i = 0; i < dustAmount * 8; i++) {
 				const x = Math.random() * width;
 				const y = Math.random() * height;
 				const length = 3 + Math.random() * 5;
@@ -171,48 +214,59 @@ function Main() {
 				ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
 				ctx.lineWidth = 0.5;
 				ctx.stroke();
+			  }
 			}
-		}
-
-		if (controls.blur > 0) {
-			const blurAmount = controls.blur / 100;
-			ctx.filter = `blur(${blurAmount * 3}px)`;
-			ctx.drawImage(canvasRef.current, 0, 0);
-			ctx.filter = "none";
-		}
-
-		if (controls.leakIntensity > 0) {
-			ctx.globalCompositeOperation = "screen";
-			const leakAmount = controls.leakIntensity / 100;
-
-			const leakColors = [
+		  
+			if (controls.blur > 0) {
+			  const blurAmount = controls.blur / 100;
+			  ctx.filter = `blur(${blurAmount * 3}px)`;
+			  ctx.drawImage(canvasRef.current, 0, 0);
+			  ctx.filter = "none";
+			}
+		  
+			if (controls.leakIntensity > 0) {
+			  ctx.globalCompositeOperation = "screen";
+			  const leakAmount = controls.leakIntensity / 100;
+		  
+			  const leakColors = [
 				{ color: `rgba(255, 80, 80, ${0.15 * leakAmount})`, x: 0, y: 0 },
 				{
-					color: `rgba(255, 200, 100, ${0.1 * leakAmount})`,
-					x: width * 0.3,
-					y: height * 0.2,
+				  color: `rgba(255, 200, 100, ${0.1 * leakAmount})`,
+				  x: width * 0.3,
+				  y: height * 0.2,
 				},
 				{
-					color: `rgba(255, 100, 200, ${0.1 * leakAmount})`,
-					x: width * 0.7,
-					y: height * 0.4,
+				  color: `rgba(255, 100, 200, ${0.1 * leakAmount})`,
+				  x: width * 0.7,
+				  y: height * 0.4,
 				},
-			];
-
-			leakColors.forEach(({ color, x, y }) => {
+			  ];
+		  
+			  leakColors.forEach(({ color, x, y }) => {
 				const grad = ctx.createRadialGradient(x, y, 0, x, y, width / 2);
 				grad.addColorStop(0, color);
 				grad.addColorStop(1, "transparent");
 				ctx.fillStyle = grad;
 				ctx.fillRect(0, 0, width, height);
-			});
-
-			ctx.globalCompositeOperation = "source-over";
-		}
-		setFilteredImage(canvasRef.current.toDataURL("image/png"));
-		setIsProcessing(false);
+			  });
+		  
+			  ctx.globalCompositeOperation = "source-over";
+			}
+		  
+			// Update the control snapshot after all processing
+			cache.controlsSnapshot = { ...controls };
+			
+			setFilteredImage(canvasRef.current.toDataURL("image/png"));
+			setIsProcessing(false);
 	};
 
+	const debouncedApplyFilter = useCallback(
+		debounce((ctx: CanvasRenderingContext2D) => {
+		  applyFilter(ctx);
+		}, 200),
+		[]
+	);
+	
 	const downloadCanvas = () => {
 		if (!filteredImage) return;
 
@@ -258,11 +312,13 @@ function Main() {
 		if (changed) {
 			const ctx = canvasRef.current.getContext("2d", { willReadFrequently: true });
 			if (!ctx) return;
+
 			prevControlsRef.current = controls;
 			setIsProcessing(true);
+
 			applyFilter(ctx);
 		}
-	}, );
+	},[controls, debouncedApplyFilter] );
 
 	return (
 		<div
