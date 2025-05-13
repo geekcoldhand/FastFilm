@@ -1,15 +1,10 @@
 import React from "react";
 import { Slider } from "./ui/slider";
 import { Label } from "./ui/label";
-import useActiveTab from "../hooks/use-active-tab";
-import { Palette, Layers, Lightbulb } from "lucide-react";
 import { useControls } from "../hooks/create-controls-context";
 
 type Tab = "color" | "texture" | "lighting";
 export default function TabControlPanel({ open }: { open: Tab }) {
-	
-
-	//const { activeTabControl, openTab, isTabOpen, closeTab } = useActiveTab();
 	const { controls, setControl } = useControls();
 
 	const handleControlChange = (
@@ -21,25 +16,35 @@ export default function TabControlPanel({ open }: { open: Tab }) {
 		});
 	};
 
-	const handleReset = () => {
-		setControl({
-			temperature: 30,
-			shadowBlue: 20,
-			saturation: 30,
-			contrast: 40,
-			grain: 60,
-			dust: 40,
-			blur: 20,
-			dimming: 25,
-			leakIntensity: 35,
-		});
-	};
+	const controlSettings = {
+		"color": [
+		  { id: "temperature", label: "Cool Temperature", max: 200 },
+		  { id: "shadowBlue", label: "Blue Shadows", max: 200 },
+		  { id: "saturation", label: "Saturation", max: 120 },
+		  { id: "contrast", label: "Reduced Contrast", max: 100 },
+		],
+		"texture": [
+		  { id: "grain", label: "Film Grain", max: 130 },
+		  { id: "dust", label: "Dust Particles", max: 100 },
+		  { id: "blur", label: "Softness/Blur", max: 100 },
+		],
+		"lighting": [
+		  { id: "dimming", label: "Dim Lighting", max: 100 },
+		  { id: "leakIntensity", label: "Light Leak Intensity", max: 130 },
+		],
+	  };
 
 	return (
-		<div className="" style={{width: "70%",  }}>
+		<div className="" style={{ width: "70%" }}>
 			{open === "color" && (
-				<div className="space-y-6"
-				style={{borderTop: "1px solid #e5e7eb", borderBottom: "1px solid #e5e7eb",}}>
+				<div
+					className="space-y-6"
+					style={{
+						borderTop: "1px solid #e5e7eb",
+						borderBottom: "1px solid #e5e7eb",
+					}}
+				>
+					{}
 					<div>
 						<div className="flex justify-between mb-2">
 							<Label htmlFor="temperature">Cool Temperature </Label>

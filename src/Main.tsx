@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Upload, RefreshCw, Palette, Layers, Lightbulb } from "lucide-react";
 import { useControls } from "./hooks/create-controls-context";
 import useActiveTab from "./hooks/use-active-tab";
@@ -11,25 +11,59 @@ function Main() {
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [filteredImage, setFilteredImage] = useState<string | null>(null);
 
-	const canvasRef = useRef<HTMLCanvasElement>(null);
+  	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const imgRef = useRef<HTMLImageElement | null>(null);
-
+	const cacheRef = useRef<{
+		baseImageData: ImageData | null;
+		processedBaseImage: ImageData | null;
+		controlsSnapshot: typeof controls | null;
+		grainCache: string | null;
+		dustCache: string | null;
+		blurCache: string | null;
+		leakCache: string | null;
+	  }>({
+		baseImageData: null,
+		processedBaseImage: null,
+		controlsSnapshot: null,
+		grainCache: null,
+		dustCache: null,
+		blurCache: null,
+		leakCache: null,
+	  });
+  
 	const { activeTabControl, openTab } = useActiveTab();
 	const { controls } = useControls();
 	const prevControlsRef = useRef(controls);
+	const tempCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-	useEffect(() => {
-		console.log("Image state:", { image, isProcessing, filteredImage });
-	}, [image, isProcessing, filteredImage]);
-
-	const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const createTempCanvas = (width: number, height: number): HTMLCanvasElement => {
+		if (!tempCanvasRef.current) {
+		  tempCanvasRef.current = document.createElement('canvas');
+		}
+		tempCanvasRef.current.width = width;
+		tempCanvasRef.current.height = height;
+		return tempCanvasRef.current;
+	};
+	const shouldReprocessBase = (oldControls: typeof controls | null, newControls: typeof controls): boolean => {
+		if (!oldControls) return true;
+		
+		return (
+		  oldControls.temperature !== newControls.temperature ||
+		  oldControls.saturation !== newControls.saturation ||
+		  oldControls.contrast !== newControls.contrast ||
+		  oldControls.dimming !== newControls.dimming ||
+		  oldControls.shadowBlue !== newControls.shadowBlue
+		);
+	  };
+	
+	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) return;
 
 		setIsProcessing(true);
 		const reader = new FileReader();
-		reader.onload = () => {
+		 reader.onload = () => {
 			const result = reader.result as string;
 			setImage(result);
 
@@ -53,7 +87,7 @@ function Main() {
 				ctx.drawImage(img, 0, 0);
 				applyFilter(ctx);
 			};
-			//e.target.value = "";
+		
 		};
 		reader.readAsDataURL(file);
 	};
@@ -62,6 +96,8 @@ function Main() {
 		if (!canvasRef.current || !imgRef.current) return;
 
 		const { width, height } = canvasRef.current;
+	
+
 		ctx.clearRect(0, 0, width, height);
 		ctx.drawImage(imgRef.current, 0, 0, width, height);
 
@@ -128,7 +164,6 @@ function Main() {
 				const y = Math.random() * height;
 				const length = 3 + Math.random() * 5;
 				const angle = Math.random() * Math.PI * 2;
-				//const opacity = 0.05 + Math.random() * 0.1;
 				const opacity = 0.2 + Math.random() * 0.1;
 				ctx.beginPath();
 				ctx.moveTo(x, y);
@@ -189,15 +224,31 @@ function Main() {
 		document.body.removeChild(link);
 	};
 
-	const handleUploadClick = () => {
+	const resetImage = () => {
+		setImage(null);
+		setIsProcessing(false);
+		setFilteredImage(null);
 		if (fileInputRef.current) {
-			setIsProcessing(false);
-			fileInputRef.current.click();
-			setTimeout(() => {
-				if (fileInputRef.current) {
-					fileInputRef.current.value = "";
-				}
-			}, 100);
+			fileInputRef.current.value = "";
+		}
+		if (imgRef.current) {
+			imgRef.current = null;
+		}
+		if (canvasRef.current) {
+			const ctx = canvasRef.current.getContext("2d");
+			if (ctx) {
+				ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+			}
+		}
+	};
+
+	const handleUploadClick = () => {
+		if (image) {
+			resetImage();
+		} else {
+			if (fileInputRef.current) {
+				fileInputRef.current.click();
+			}
 		}
 	};
 	useEffect(() => {
@@ -205,17 +256,17 @@ function Main() {
 		const changed =
 			JSON.stringify(controls) !== JSON.stringify(prevControlsRef.current);
 		if (changed) {
-			const ctx = canvasRef.current.getContext("2d");
+			const ctx = canvasRef.current.getContext("2d", { willReadFrequently: true });
 			if (!ctx) return;
 			prevControlsRef.current = controls;
 			setIsProcessing(true);
 			applyFilter(ctx);
 		}
-	}, [controls, applyFilter]);
+	}, );
 
 	return (
 		<div
-			className="flex flex-col items-center w-full"
+	
 			style={{
 				display: "flex",
 				flexDirection: "column",
@@ -225,7 +276,7 @@ function Main() {
 			}}
 		>
 			<div
-				className="shadow-lg border p-4 mb-10"
+		
 				style={{
 					textAlign: "center",
 					marginTop: "1rem",
@@ -270,7 +321,7 @@ function Main() {
 					</div>
 				) : (
 					<div
-						className="flex flex-col items-center"
+					
 						style={{ width: "21rem", margin: "0 auto" }}
 					>
 						{isProcessing && <RefreshCw className="animate-spin mb-2" />}
@@ -296,14 +347,14 @@ function Main() {
 				)}
 			</div>
 
-			<TabControlPanel open={activeTabControl as Tab} />
-
-			<div
-				className=""
+      <div
+			
 				style={{
 					width: "100%",
 					display: "flex",
 					justifyContent: "center",
+          flexDirection: "column",
+          alignItems: "center",
 					position: "fixed",
 					bottom: "80px",
 					left: "0",
@@ -312,9 +363,19 @@ function Main() {
 					backgroundColor: "white",
 				}}
 			>
+				<TabControlPanel open={activeTabControl as Tab} />
+				<div
+					style={{
+						width: "100%",
+						display: "flex",
+						justifyContent: "center",
+						zIndex: "30",
+						backgroundColor: "white",
+					}}
+				>
 				<button
 					onClick={() => handleUploadClick()}
-					className="flex flex-col items-center"
+				
 					style={{ padding: "0.25rem" }}
 				>
 					<Upload
@@ -324,12 +385,13 @@ function Main() {
 							marginBottom: "0.25rem",
 						}}
 					/>
-					<span style={{ fontSize: "0.75rem" }}>Upload</span>
+					<span style={{ fontSize: "0.75rem" }}>
+						{image ? "Reset" : "Upload"}
+					</span>
 				</button>
 				{["color", "texture", "lighting"].map((tab) => (
 					<button
 						key={tab}
-						className="flex flex-col items-center"
 						style={{ padding: "0.25rem" }}
 						onClick={() => openTab(tab === activeTabControl ? "color" : tab)}
 					>
@@ -363,8 +425,9 @@ function Main() {
 						<span style={{ fontSize: "0.75rem", textTransform: "capitalize" }}>
 							{tab}
 						</span>
-					</button>
+          </button>
 				))}
+        </div>
 			</div>
 		</div>
 	);
